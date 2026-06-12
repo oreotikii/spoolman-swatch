@@ -1,4 +1,4 @@
-import { CopyOutlined, DeleteOutlined, PlusOutlined, SaveOutlined } from "@ant-design/icons";
+﻿import { CopyOutlined, DeleteOutlined, PlusOutlined, SaveOutlined } from "@ant-design/icons";
 import { useTranslate } from "@refinedev/core";
 import { Button, Flex, Form, Input, Modal, Popconfirm, Select, Table, Typography, message } from "antd";
 import TextArea from "antd/es/input/TextArea";
@@ -156,9 +156,10 @@ const SpoolQRCodePrintingDialog = ({ spoolIds }: SpoolQRCodePrintingDialog) => {
     curPreset.template ??
     `**{filament.vendor.name} - {filament.name}
 #{id} - {filament.material}**
+{Color: {filament.color_swatch}}
 Spool Weight: {filament.spool_weight} g
-{ET: {filament.settings_extruder_temp} °C}
-{BT: {filament.settings_bed_temp} °C}
+{ET: {filament.settings_extruder_temp} Â°C}
+{BT: {filament.settings_bed_temp} Â°C}
 {Lot Nr: {lot_nr}}
 {{comment}}
 {filament.comment}
@@ -201,6 +202,7 @@ Spool Weight: {filament.spool_weight} g
     { tag: "filament.comment" },
     { tag: "filament.settings_extruder_temp" },
     { tag: "filament.settings_bed_temp" },
+    { tag: "filament.color_swatch" },
     { tag: "filament.color_hex" },
     { tag: "filament.multi_color_hexes" },
     { tag: "filament.multi_color_direction" },

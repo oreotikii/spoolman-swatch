@@ -45,6 +45,7 @@ The custom image workflow builds the frontend with `VITE_APIURL=/api/v1` before 
 - Inline `{filament.color_swatch}` swatches are rendered as `span` elements with millimeter sizing and print color adjustment enabled so browser print output preserves the color block.
 - Conditional template syntax such as `{Color: {filament.color_swatch}}` should omit the prefix and suffix when no valid color is available.
 - Keep the template renderer returning React nodes. Do not convert it back to whole-string replacement, because that loses the ability to insert swatch elements.
+- Label templates support explicit formatting markers that may wrap placeholders: `[small]`, `[medium]`, `[large]`, `[huge]`, `[bold]`, and matching closing tags. `**bold**` remains supported as a bold shorthand.
 
 ## Editing Guidelines
 

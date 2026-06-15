@@ -66,6 +66,7 @@ const QRCodePrintingDialog = ({
             errorLevel={item.errorLevel}
             type="svg"
             color="#000"
+            bordered={false}
           />
         </div>
       ) : null;

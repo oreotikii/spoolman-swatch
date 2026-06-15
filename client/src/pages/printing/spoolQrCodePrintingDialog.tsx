@@ -72,7 +72,14 @@ const swatchLabelPrintStyle = `
   }
 
   .print-page .print-swatch-qr .print-qrcode {
+    border: 0 !important;
+    border-radius: 0 !important;
     padding: 0 !important;
+  }
+
+  .print-page .print-swatch-qr .print-qrcode svg,
+  .print-page .print-swatch-qr .print-qrcode path {
+    border-radius: 0 !important;
   }
 
   .print-page .print-swatch-content {
@@ -88,13 +95,6 @@ const swatchLabelPrintStyle = `
     white-space: pre-wrap;
   }
 
-  .print-page .print-swatch-content b:first-of-type {
-    display: block;
-    margin-bottom: 0.5mm;
-    font-size: clamp(10mm, calc(var(--swatch-text-size) * 4.2), 22mm);
-    font-weight: 400;
-    line-height: 0.9;
-  }
 `;
 
 function renderSwatchLabel({ item, qrCode, showContent, showQRCodeMode, textSize }: QRCodeRenderItemParams) {
@@ -243,7 +243,7 @@ const SpoolQRCodePrintingDialog = ({ spoolIds }: SpoolQRCodePrintingDialog) => {
   const [templateHelpOpen, setTemplateHelpOpen] = useState(false);
   const template =
     curPreset.template ??
-    `**#{id}**
+    `[huge]#{id}[/huge]
 {filament.vendor.name} - {filament.material}
 {filament.name}
 
@@ -415,6 +415,10 @@ const SpoolQRCodePrintingDialog = ({ spoolIds }: SpoolQRCodePrintingDialog) => {
                   updateCurrentPreset(curPreset);
                 }}
               />
+              <Text type="secondary">
+                Formatting: [small]...[/small], [medium]...[/medium], [large]...[/large], [huge]...[/huge],
+                [bold]...[/bold], or **bold**.
+              </Text>
             </Form.Item>
             <Modal open={templateHelpOpen} footer={null} onCancel={() => setTemplateHelpOpen(false)}>
               <Table

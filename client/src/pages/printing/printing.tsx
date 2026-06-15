@@ -79,6 +79,11 @@ function getTagValue(tag: string, obj: GenericObject): any {
 }
 
 const COLOR_SWATCH_TAG = "filament.color_swatch";
+const TEXT_SIZE_FORMATS = ["small", "medium", "large", "huge"] as const;
+type TextSizeFormat = (typeof TEXT_SIZE_FORMATS)[number];
+type TextFormat = "bold" | TextSizeFormat;
+
+const FORMAT_MARKER_REGEX = /(\*\*|\[\/?(?:bold|b|small|medium|large|huge)\])/gi;
 
 function normalizeHexColor(hex: unknown): string | undefined {
   const normalized = String(hex ?? "")
@@ -147,38 +152,111 @@ function renderColorSwatch(spool: ISpool, key: string): ReactElement | null {
   return <span key={key} style={style} title={background} />;
 }
 
-function renderFormattedText(text: string, keyPrefix: string): ReactElement[] {
-  const regex = /\*\*([\w\W]*?)\*\*/g;
-  const parts = text.split(regex);
-
-  return parts.map((part, index) => {
-    const children: ReactNode[] = [];
-
-    part.split("\n").forEach((line, lineIndex, arr) => {
-      children.push(line);
-
-      if (lineIndex < arr.length - 1) {
-        children.push(<br key={`${keyPrefix}-${index}-${lineIndex}-br`} />);
-      }
-    });
-
-    return index % 2 === 0 ? (
-      <span key={`${keyPrefix}-${index}`}>{children}</span>
-    ) : (
-      <b key={`${keyPrefix}-${index}`}>{children}</b>
-    );
-  });
-}
-
 export function renderLabelContents(template: string, spool: ISpool): ReactElement {
   const matches = [...template.matchAll(/{(?:[^}{]|{[^}{]*})*}/gs)];
   const elements: ReactNode[] = [];
   let lastIndex = 0;
   let keyCounter = 0;
+  const formatStack: TextFormat[] = [];
+
+  const currentTextSize = (): TextSizeFormat | undefined => {
+    for (let index = formatStack.length - 1; index >= 0; index -= 1) {
+      const format = formatStack[index];
+
+      if (TEXT_SIZE_FORMATS.includes(format as TextSizeFormat)) {
+        return format as TextSizeFormat;
+      }
+    }
+
+    return undefined;
+  };
+
+  const removeLastFormat = (formatToRemove: TextFormat) => {
+    const index = formatStack.lastIndexOf(formatToRemove);
+
+    if (index !== -1) {
+      formatStack.splice(index, 1);
+    }
+  };
+
+  const getFormattedTextStyle = (): CSSProperties | undefined => {
+    const style: CSSProperties = {};
+    const size = currentTextSize();
+
+    if (formatStack.includes("bold")) {
+      style.fontWeight = 700;
+    }
+
+    if (size === "small") {
+      style.fontSize = "0.78em";
+    } else if (size === "medium") {
+      style.fontSize = "1.15em";
+    } else if (size === "large") {
+      style.fontSize = "1.55em";
+      style.lineHeight = 1;
+    } else if (size === "huge") {
+      style.display = "inline-block";
+      style.fontSize = "3.15em";
+      style.lineHeight = 0.9;
+    }
+
+    return Object.keys(style).length > 0 ? style : undefined;
+  };
+
+  const pushPlainText = (text: string) => {
+    text.split("\n").forEach((line, lineIndex, arr) => {
+      if (line.length > 0) {
+        elements.push(
+          <span key={`text-${keyCounter++}`} style={getFormattedTextStyle()}>
+            {line}
+          </span>,
+        );
+      }
+
+      if (lineIndex < arr.length - 1) {
+        elements.push(<br key={`br-${keyCounter++}`} />);
+      }
+    });
+  };
+
+  const applyFormatMarker = (marker: string) => {
+    const normalized = marker.toLowerCase();
+
+    if (normalized === "**") {
+      if (formatStack.includes("bold")) {
+        removeLastFormat("bold");
+      } else {
+        formatStack.push("bold");
+      }
+      return;
+    }
+
+    const isClosing = normalized.startsWith("[/");
+    const markerName = normalized.replace(/^\[\/?/, "").replace(/\]$/, "");
+    const format = markerName === "b" ? "bold" : (markerName as TextFormat);
+
+    if (isClosing) {
+      removeLastFormat(format);
+      return;
+    }
+
+    formatStack.push(format);
+  };
 
   const pushText = (text: string) => {
     if (text.length === 0) return;
-    elements.push(...renderFormattedText(text, `text-${keyCounter++}`));
+
+    let lastMarkerIndex = 0;
+
+    [...text.matchAll(FORMAT_MARKER_REGEX)].forEach((match) => {
+      const markerIndex = match.index ?? 0;
+
+      pushPlainText(text.slice(lastMarkerIndex, markerIndex));
+      applyFormatMarker(match[0]);
+      lastMarkerIndex = markerIndex + match[0].length;
+    });
+
+    pushPlainText(text.slice(lastMarkerIndex));
   };
 
   const pushSwatch = () => {

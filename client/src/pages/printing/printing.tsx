@@ -99,7 +99,7 @@ function splitHexColors(hexes: unknown): string[] {
     .filter((color): color is string => Boolean(color));
 }
 
-function getColorSwatchBackground(spool: ISpool): string | undefined {
+export function getColorSwatchBackground(spool: ISpool): string | undefined {
   const multiColors = splitHexColors(spool.filament.multi_color_hexes);
 
   if (multiColors.length > 1) {

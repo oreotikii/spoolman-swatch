@@ -7,10 +7,19 @@ import PrintingDialog from "./printingDialog";
 
 const { Text } = Typography;
 
-interface QRCodeData {
+export interface QRCodeData {
   value: string;
   label?: ReactElement;
   errorLevel?: "L" | "M" | "Q" | "H";
+  data?: unknown;
+}
+
+export interface QRCodeRenderItemParams {
+  item: QRCodeData;
+  qrCode: ReactElement | null;
+  showContent: boolean;
+  showQRCodeMode: "no" | "simple" | "withIcon";
+  textSize: number;
 }
 
 interface QRCodePrintingDialogProps {
@@ -23,6 +32,8 @@ interface QRCodePrintingDialogProps {
   baseUrlRoot: string;
   useHTTPUrl: boolean;
   setUseHTTPUrl: (value: boolean) => void;
+  renderItem?: (params: QRCodeRenderItemParams) => ReactElement;
+  extraPrintStyle?: string;
 }
 
 const QRCodePrintingDialog = ({
@@ -35,6 +46,8 @@ const QRCodePrintingDialog = ({
   baseUrlRoot,
   useHTTPUrl,
   setUseHTTPUrl,
+  renderItem,
+  extraPrintStyle,
 }: QRCodePrintingDialogProps) => {
   const t = useTranslate();
 
@@ -43,24 +56,33 @@ const QRCodePrintingDialog = ({
   const textSize = printSettings?.textSize || 3;
 
   const elements = items.map((item, idx) => {
+    const qrCode =
+      showQRCodeMode !== "no" ? (
+        <div className="print-qrcode-container">
+          <QRCode
+            className="print-qrcode"
+            icon={showQRCodeMode === "withIcon" ? getBasePath() + "/favicon.svg" : undefined}
+            value={item.value}
+            errorLevel={item.errorLevel}
+            type="svg"
+            color="#000"
+          />
+        </div>
+      ) : null;
+
     return (
       <div className="print-qrcode-item" key={idx}>
-        {showQRCodeMode !== "no" && (
-          <div className="print-qrcode-container">
-            <QRCode
-              className="print-qrcode"
-              icon={showQRCodeMode === "withIcon" ? getBasePath() + "/favicon.svg" : undefined}
-              value={item.value}
-              errorLevel={item.errorLevel}
-              type="svg"
-              color="#000"
-            />
-          </div>
-        )}
-        {showContent && (
-          <div className="print-qrcode-title" style={showQRCodeMode === "no" ? { paddingLeft: "1mm" } : {}}>
-            {item.label ?? item.value}
-          </div>
+        {renderItem ? (
+          renderItem({ item, qrCode, showContent, showQRCodeMode, textSize })
+        ) : (
+          <>
+            {qrCode}
+            {showContent && (
+              <div className="print-qrcode-title" style={showQRCodeMode === "no" ? { paddingLeft: "1mm" } : {}}>
+                {item.label ?? item.value}
+              </div>
+            )}
+          </>
         )}
       </div>
     );
@@ -193,6 +215,8 @@ const QRCodePrintingDialog = ({
               max-height: 100%;
               max-width: 100%;
             }
+
+            ${extraPrintStyle ?? ""}
             `}
     />
   );

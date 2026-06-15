@@ -2,7 +2,7 @@
 import { useTranslate } from "@refinedev/core";
 import { Button, Flex, Form, Input, Modal, Popconfirm, Select, Table, Typography, message } from "antd";
 import TextArea from "antd/es/input/TextArea";
-import { useState } from "react";
+import { CSSProperties, useState } from "react";
 import { v4 as uuidv4 } from "uuid";
 import { EntityType, useGetFields } from "../../utils/queryFields";
 import { useGetSetting } from "../../utils/querySettings";
@@ -11,16 +11,105 @@ import { useGetSpoolsByIds } from "../spools/functions";
 import { ISpool } from "../spools/model";
 import {
   SpoolQRCodePrintSettings,
+  getColorSwatchBackground,
   renderLabelContents,
   useGetPrintSettings as useGetPrintPresets,
   useSetPrintSettings as useSetPrintPresets,
 } from "./printing";
-import QRCodePrintingDialog from "./qrCodePrintingDialog";
+import QRCodePrintingDialog, { QRCodeRenderItemParams } from "./qrCodePrintingDialog";
 
 const { Text } = Typography;
 
 interface SpoolQRCodePrintingDialog {
   spoolIds: number[];
+}
+
+const swatchLabelPrintStyle = `
+  .print-page .print-swatch-label {
+    display: grid;
+    grid-template-columns: 38% minmax(0, 1fr);
+    gap: 2mm;
+    width: 100%;
+    height: 100%;
+    padding: 1.5mm;
+    color: #000;
+    overflow: hidden;
+  }
+
+  .print-page .print-swatch-left {
+    display: grid;
+    grid-template-rows: 24% minmax(0, 1fr);
+    gap: 1.5mm;
+    min-width: 0;
+    min-height: 0;
+  }
+
+  .print-page .print-swatch-left-no-qr {
+    grid-template-rows: 100%;
+  }
+
+  .print-page .print-swatch-color {
+    width: 100%;
+    height: 100%;
+    border: 0.45mm solid #000;
+    border-radius: 0.25mm;
+    background: #fff;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  .print-page .print-swatch-qr {
+    display: flex;
+    min-width: 0;
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  .print-page .print-swatch-qr .print-qrcode-container {
+    width: 100%;
+    height: 100%;
+    max-width: 100%;
+  }
+
+  .print-page .print-swatch-qr .print-qrcode {
+    padding: 0 !important;
+  }
+
+  .print-page .print-swatch-content {
+    min-width: 0;
+    min-height: 0;
+    overflow: hidden;
+    font-size: clamp(3mm, calc(var(--swatch-text-size) * 1.45), 6.5mm);
+    line-height: 1.18;
+  }
+
+  .print-page .print-swatch-content p {
+    margin: 0;
+    white-space: pre-wrap;
+  }
+
+  .print-page .print-swatch-content b:first-of-type {
+    display: block;
+    margin-bottom: 0.5mm;
+    font-size: clamp(10mm, calc(var(--swatch-text-size) * 4.2), 22mm);
+    font-weight: 400;
+    line-height: 0.9;
+  }
+`;
+
+function renderSwatchLabel({ item, qrCode, showContent, showQRCodeMode, textSize }: QRCodeRenderItemParams) {
+  const spool = item.data as ISpool;
+  const background = getColorSwatchBackground(spool);
+
+  return (
+    <div className="print-swatch-label" style={{ "--swatch-text-size": `${textSize}mm` } as CSSProperties}>
+      <div className={`print-swatch-left ${showQRCodeMode === "no" ? "print-swatch-left-no-qr" : ""}`}>
+        <div className="print-swatch-color" style={background ? { background } : undefined} />
+        {qrCode && <div className="print-swatch-qr">{qrCode}</div>}
+      </div>
+      {showContent && <div className="print-swatch-content">{item.label ?? item.value}</div>}
+    </div>
+  );
 }
 
 const SpoolQRCodePrintingDialog = ({ spoolIds }: SpoolQRCodePrintingDialog) => {
@@ -154,16 +243,12 @@ const SpoolQRCodePrintingDialog = ({ spoolIds }: SpoolQRCodePrintingDialog) => {
   const [templateHelpOpen, setTemplateHelpOpen] = useState(false);
   const template =
     curPreset.template ??
-    `**{filament.vendor.name} - {filament.name}
-#{id} - {filament.material}**
-{Color: {filament.color_swatch}}
-Spool Weight: {filament.spool_weight} g
-{ET: {filament.settings_extruder_temp} Â°C}
-{BT: {filament.settings_bed_temp} Â°C}
-{Lot Nr: {lot_nr}}
-{{comment}}
-{filament.comment}
-{filament.vendor.comment}`;
+    `**#{id}**
+{filament.vendor.name} - {filament.material}
+{filament.name}
+
+{{filament.article_number}}
+{{registered}}`;
 
   const spoolTags = [
     { tag: "id" },
@@ -306,7 +391,7 @@ Spool Weight: {filament.spool_weight} g
           label: (
             <p
               style={{
-                padding: "1mm 1mm 1mm 0",
+                padding: 0,
                 margin: 0,
                 whiteSpace: "pre-wrap",
               }}
@@ -315,7 +400,10 @@ Spool Weight: {filament.spool_weight} g
             </p>
           ),
           errorLevel: "H",
+          data: spool,
         }))}
+        renderItem={renderSwatchLabel}
+        extraPrintStyle={swatchLabelPrintStyle}
         extraSettings={
           <>
             <Form.Item label={t("printing.qrcode.template")}>

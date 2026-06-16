@@ -18,6 +18,7 @@ from spoolman.database.utils import (
     add_where_clause_int_opt,
     add_where_clause_str,
     add_where_clause_str_opt,
+    normalize_color_hex_query,
     parse_nested_field,
 )
 from spoolman.exceptions import ItemDeleteError, ItemNotFoundError
@@ -96,6 +97,8 @@ async def find(
     *,
     db: AsyncSession,
     ids: list[int] | None = None,
+    search: str | None = None,
+    similar_color_ids: Sequence[int] | None = None,
     vendor_name: str | None = None,
     vendor_id: int | Sequence[int] | None = None,
     name: str | None = None,
@@ -126,6 +129,7 @@ async def find(
     stmt = add_where_clause_str_opt(stmt, models.Filament.material, material)
     stmt = add_where_clause_str_opt(stmt, models.Filament.article_number, article_number)
     stmt = add_where_clause_str_opt(stmt, models.Filament.external_id, external_id)
+    stmt = add_search_clause(stmt, search, similar_color_ids)
 
     total_count = None
 
@@ -152,6 +156,38 @@ async def find(
         total_count = len(result)
 
     return result, total_count
+
+
+def add_search_clause(
+    stmt: sqlalchemy.Select,
+    search: str | None,
+    similar_color_ids: Sequence[int] | None,
+) -> sqlalchemy.Select:
+    """Add a global text/color search clause to a filament query."""
+    if search is None:
+        return stmt
+
+    search_terms = [term for term in search.strip().split() if term]
+    for term in search_terms:
+        color_term = term.removeprefix("#")
+        term_pattern = f"%{term}%"
+        color_pattern = f"%{color_term}%"
+        conditions = [
+            sqlalchemy.cast(models.Filament.id, sqlalchemy.String).ilike(term_pattern),
+            models.Vendor.name.ilike(term_pattern),
+            models.Filament.name.ilike(term_pattern),
+            models.Filament.material.ilike(term_pattern),
+            models.Filament.article_number.ilike(term_pattern),
+            models.Filament.comment.ilike(term_pattern),
+            models.Filament.external_id.ilike(term_pattern),
+            models.Filament.color_hex.ilike(color_pattern),
+            models.Filament.multi_color_hexes.ilike(color_pattern),
+        ]
+        if normalize_color_hex_query(term) is not None and similar_color_ids is not None:
+            conditions.append(models.Filament.id.in_(similar_color_ids))
+        stmt = stmt.where(sqlalchemy.or_(*conditions))
+
+    return stmt
 
 
 async def update(

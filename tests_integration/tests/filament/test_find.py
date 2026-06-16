@@ -458,6 +458,35 @@ def test_find_filaments_by_external_id(filaments: Fixture):
     assert filaments_result[0] == filaments.filaments[1]
 
 
+def test_find_filaments_by_global_search_text(filaments: Fixture):
+    # Execute
+    result = httpx.get(
+        f"{URL}/api/v1/filament",
+        params={"search": "Filament abs"},
+    )
+    result.raise_for_status()
+
+    # Verify
+    filaments_result = result.json()
+    assert filaments_result == [filaments.filaments[1]]
+
+
+def test_find_filaments_by_global_search_similar_color(filaments: Fixture):
+    # Execute
+    result = httpx.get(
+        f"{URL}/api/v1/filament",
+        params={
+            "search": "#FE0000",
+            "color_similarity_threshold": 20.0,
+        },
+    )
+    result.raise_for_status()
+
+    # Verify
+    filaments_result = result.json()
+    assert_lists_compatible(filaments_result, [filaments.filaments[0], filaments.filaments[1]])
+
+
 def test_find_filaments_by_empty_external_id(filaments: Fixture):
     # Execute
     result = httpx.get(

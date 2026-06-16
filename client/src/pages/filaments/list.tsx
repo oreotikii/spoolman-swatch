@@ -1,7 +1,7 @@
 import { EditOutlined, EyeOutlined, FileOutlined, FilterOutlined, PlusSquareOutlined } from "@ant-design/icons";
 import { List, useTable } from "@refinedev/antd";
 import { useInvalidate, useNavigation, useTranslate } from "@refinedev/core";
-import { Button, Dropdown, Table } from "antd";
+import { Button, Dropdown, Input, Table } from "antd";
 import dayjs from "dayjs";
 import utc from "dayjs/plugin/utc";
 import { useMemo, useState } from "react";
@@ -25,11 +25,13 @@ import {
 } from "../../components/otherModels";
 import { removeUndefined } from "../../utils/filtering";
 import { EntityType, useGetFields } from "../../utils/queryFields";
-import { TableState, useInitialTableState, useStoreInitialState } from "../../utils/saveload";
+import { TableState, useInitialTableState, useSavedState, useStoreInitialState } from "../../utils/saveload";
 import { useCurrencyFormatter } from "../../utils/settings";
 import { IFilament } from "./model";
 
 dayjs.extend(utc);
+
+const { Search } = Input;
 
 interface IFilamentCollapsed extends Omit<IFilament, "vendor"> {
   "vendor.name": string | null;
@@ -84,12 +86,25 @@ export const FilamentList = () => {
   // Load initial state
   const initialState = useInitialTableState(namespace);
 
+  const [searchQuery, setSearchQuery] = useSavedState(`${namespace}-search`, "");
+  const [searchText, setSearchText] = useState(searchQuery);
+  const queryParams = useMemo<Record<string, string>>(() => {
+    const params: Record<string, string> = {};
+    if (searchQuery.trim()) {
+      params.search = searchQuery.trim();
+    }
+    return params;
+  }, [searchQuery]);
+
   // Fetch data from the API
   // To provide the live updates, we use a custom solution (useLiveify) instead of the built-in refine "liveMode" feature.
   // This is because the built-in feature does not call the liveProvider subscriber with a list of IDs, but instead
   // calls it with a list of filters, sorters, etc. This means the server-side has to support this, which is quite hard.
   const { tableProps, sorters, setSorters, filters, setFilters, currentPage, pageSize, setCurrentPage } =
     useTable<IFilamentCollapsed>({
+      meta: {
+        queryParams,
+      },
       syncWithLocation: false,
       pagination: {
         mode: "server",
@@ -123,6 +138,13 @@ export const FilamentList = () => {
         },
       },
     });
+
+  const applySearch = (value: string) => {
+    const nextSearch = value.trim();
+    setSearchText(nextSearch);
+    setSearchQuery(nextSearch);
+    setCurrentPage(1);
+  };
 
   // Create state for the columns to show
   const [showColumns, setShowColumns] = useState<string[]>(initialState.showColumns ?? defaultColumns);
@@ -173,6 +195,8 @@ export const FilamentList = () => {
             type="primary"
             icon={<FilterOutlined />}
             onClick={() => {
+              setSearchText("");
+              setSearchQuery("");
               setFilters([], "replace");
               setSorters([{ field: "id", order: "asc" }]);
               setCurrentPage(1);
@@ -180,6 +204,21 @@ export const FilamentList = () => {
           >
             {t("buttons.clearFilters")}
           </Button>
+          <Search
+            allowClear
+            placeholder={t("table.searchFilaments")}
+            value={searchText}
+            onChange={(event) => {
+              const value = event.target.value;
+              setSearchText(value);
+              if (value === "") {
+                setSearchQuery("");
+                setCurrentPage(1);
+              }
+            }}
+            onSearch={applySearch}
+            style={{ width: 320 }}
+          />
           <Dropdown
             trigger={["click"]}
             menu={{

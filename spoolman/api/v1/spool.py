@@ -12,9 +12,9 @@ from pydantic import BaseModel, Field, field_validator
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from spoolman.api.v1.models import Message, Spool, SpoolEvent
-from spoolman.database import spool
+from spoolman.database import filament, spool
 from spoolman.database.database import get_db_session
-from spoolman.database.utils import SortOrder
+from spoolman.database.utils import SortOrder, normalize_color_hex_query
 from spoolman.exceptions import ItemCreateError, SpoolMeasureError
 from spoolman.extra_fields import EntityType, get_extra_fields, validate_extra_field_dict
 from spoolman.ws import websocket_manager
@@ -247,6 +247,27 @@ async def find(
             ),
         ),
     ] = None,
+    search: Annotated[
+        str | None,
+        Query(
+            title="Search",
+            description=(
+                "Global search term matched against spool ID, filament ID, vendor, filament name, material, "
+                "article number, location, lot number, comments, external ID, and color hex values. "
+                "Separate words with spaces to require each word."
+            ),
+        ),
+    ] = None,
+    color_similarity_threshold: Annotated[
+        float,
+        Query(
+            description=(
+                "The similarity threshold for color matching when search contains a full hex color. "
+                "A value between 0.0-100.0, where 0 means match only exactly the same color."
+            ),
+            examples=[20.0],
+        ),
+    ] = 20.0,
     allow_archived: Annotated[
         bool,
         Query(title="Allow Archived", description="Whether to include archived spools in the search results."),
@@ -285,8 +306,25 @@ async def find(
     else:
         filament_vendor_ids = None
 
+    similar_color_filament_ids: list[int] | None = None
+    if search is not None:
+        color_queries = [normalize_color_hex_query(term) for term in search.split()]
+        color_queries = [query for query in color_queries if query is not None]
+        if color_queries:
+            similar_color_filament_ids_set: set[int] = set()
+            for color_query in color_queries:
+                matched_filaments = await filament.find_by_color(
+                    db=db,
+                    color_query_hex=color_query,
+                    similarity_threshold=color_similarity_threshold,
+                )
+                similar_color_filament_ids_set.update(db_filament.id for db_filament in matched_filaments)
+            similar_color_filament_ids = list(similar_color_filament_ids_set)
+
     db_items, total_count = await spool.find(
         db=db,
+        search=search,
+        similar_color_filament_ids=similar_color_filament_ids,
         filament_name=filament_name if filament_name is not None else filament_name_old,
         filament_id=filament_ids,
         filament_material=filament_material if filament_material is not None else filament_material_old,

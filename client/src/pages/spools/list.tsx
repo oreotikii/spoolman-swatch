@@ -10,7 +10,7 @@ import {
 } from "@ant-design/icons";
 import { List, useTable } from "@refinedev/antd";
 import { useInvalidate, useNavigation, useTranslate } from "@refinedev/core";
-import { Button, Dropdown, Modal, Table } from "antd";
+import { Button, Dropdown, Input, Modal, Table } from "antd";
 import dayjs from "dayjs";
 import utc from "dayjs/plugin/utc";
 import { useCallback, useMemo, useState } from "react";
@@ -43,6 +43,7 @@ import { ISpool } from "./model";
 dayjs.extend(utc);
 
 const { confirm } = Modal;
+const { Search } = Input;
 
 interface ISpoolCollapsed extends ISpool {
   "filament.combined_name": string; // Eg. "Prusa - PLA Red"
@@ -113,6 +114,18 @@ export const SpoolList = () => {
   // State for the switch to show archived spools
   const [showArchived, setShowArchived] = useSavedState("spoolList-showArchived", false);
 
+  const [searchQuery, setSearchQuery] = useSavedState(`${namespace}-search`, "");
+  const [searchText, setSearchText] = useState(searchQuery);
+  const queryParams = useMemo<Record<string, string | boolean>>(() => {
+    const params: Record<string, string | boolean> = {
+      ["allow_archived"]: showArchived,
+    };
+    if (searchQuery.trim()) {
+      params.search = searchQuery.trim();
+    }
+    return params;
+  }, [searchQuery, showArchived]);
+
   // Fetch data from the API
   // To provide the live updates, we use a custom solution (useLiveify) instead of the built-in refine "liveMode" feature.
   // This is because the built-in feature does not call the liveProvider subscriber with a list of IDs, but instead
@@ -120,9 +133,7 @@ export const SpoolList = () => {
   const { tableProps, sorters, setSorters, filters, setFilters, currentPage, pageSize, setCurrentPage } =
     useTable<ISpoolCollapsed>({
       meta: {
-        queryParams: {
-          ["allow_archived"]: showArchived,
-        },
+        queryParams,
       },
       syncWithLocation: false,
       pagination: {
@@ -157,6 +168,13 @@ export const SpoolList = () => {
         },
       },
     });
+
+  const applySearch = (value: string) => {
+    const nextSearch = value.trim();
+    setSearchText(nextSearch);
+    setSearchQuery(nextSearch);
+    setCurrentPage(1);
+  };
 
   // Create state for the columns to show
   const [showColumns, setShowColumns] = useState<string[]>(initialState.showColumns ?? defaultColumns);
@@ -282,6 +300,8 @@ export const SpoolList = () => {
             type="primary"
             icon={<FilterOutlined />}
             onClick={() => {
+              setSearchText("");
+              setSearchQuery("");
               setFilters([], "replace");
               setSorters([{ field: "id", order: "asc" }]);
               setCurrentPage(1);
@@ -289,6 +309,21 @@ export const SpoolList = () => {
           >
             {t("buttons.clearFilters")}
           </Button>
+          <Search
+            allowClear
+            placeholder={t("table.searchSpools")}
+            value={searchText}
+            onChange={(event) => {
+              const value = event.target.value;
+              setSearchText(value);
+              if (value === "") {
+                setSearchQuery("");
+                setCurrentPage(1);
+              }
+            }}
+            onSearch={applySearch}
+            style={{ width: 320 }}
+          />
           <Dropdown
             trigger={["click"]}
             menu={{

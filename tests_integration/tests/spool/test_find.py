@@ -435,6 +435,64 @@ def test_find_spools_by_location(spools: Fixture):
     assert spools_result == [spools.spools[0]]
 
 
+def test_find_spools_by_global_search_text(spools: Fixture):
+    # Execute
+    result = httpx.get(
+        f"{URL}/api/v1/spool",
+        params={"search": "Pantry PLA"},
+    )
+    result.raise_for_status()
+
+    # Verify
+    spools_result = result.json()
+    assert spools_result == [spools.spools[0]]
+
+
+def test_find_spools_by_global_search_similar_color():
+    filament_result = httpx.post(
+        f"{URL}/api/v1/filament",
+        json={
+            "name": "Color Search Filament",
+            "material": "PLA",
+            "density": 1.25,
+            "diameter": 1.75,
+            "weight": 1000,
+            "color_hex": "EE0000",
+        },
+    )
+    filament_result.raise_for_status()
+    filament = filament_result.json()
+
+    spool_result = httpx.post(
+        f"{URL}/api/v1/spool",
+        json={
+            "filament_id": filament["id"],
+            "remaining_weight": 1000,
+            "location": "Color Search Shelf",
+        },
+    )
+    spool_result.raise_for_status()
+    spool = spool_result.json()
+
+    try:
+        # Execute
+        result = httpx.get(
+            f"{URL}/api/v1/spool",
+            params={
+                "search": "#FE0000",
+                "color_similarity_threshold": 20.0,
+            },
+        )
+        result.raise_for_status()
+
+        # Verify
+        spools_result = result.json()
+        assert any(item["id"] == spool["id"] for item in spools_result)
+    finally:
+        httpx.delete(f"{URL}/api/v1/spool/{spool['id']}").raise_for_status()
+        httpx.delete(f"{URL}/api/v1/filament/{filament['id']}").raise_for_status()
+
+
 def test_find_spools_by_empty_location(spools: Fixture):
     # Execute
     result = httpx.get(

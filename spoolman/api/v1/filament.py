@@ -13,7 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from spoolman.api.v1.models import Filament, FilamentEvent, Message, MultiColorDirection
 from spoolman.database import filament
 from spoolman.database.database import get_db_session
-from spoolman.database.utils import SortOrder
+from spoolman.database.utils import SortOrder, normalize_color_hex_query
 from spoolman.exceptions import ItemDeleteError
 from spoolman.extra_fields import EntityType, get_extra_fields, validate_extra_field_dict
 from spoolman.ws import websocket_manager
@@ -275,6 +275,16 @@ async def find(
             ),
         ),
     ] = None,
+    search: Annotated[
+        str | None,
+        Query(
+            title="Search",
+            description=(
+                "Global search term matched against filament ID, vendor, name, material, article number, "
+                "comments, external ID, and color hex values. Separate words with spaces to require each word."
+            ),
+        ),
+    ] = None,
     color_hex: Annotated[
         str | None,
         Query(
@@ -342,9 +352,26 @@ async def find(
     else:
         filter_by_ids = None
 
+    similar_color_ids: list[int] | None = None
+    if search is not None:
+        color_queries = [normalize_color_hex_query(term) for term in search.split()]
+        color_queries = [query for query in color_queries if query is not None]
+        if color_queries:
+            similar_color_ids_set: set[int] = set()
+            for color_query in color_queries:
+                matched_filaments = await filament.find_by_color(
+                    db=db,
+                    color_query_hex=color_query,
+                    similarity_threshold=color_similarity_threshold,
+                )
+                similar_color_ids_set.update(db_filament.id for db_filament in matched_filaments)
+            similar_color_ids = list(similar_color_ids_set)
+
     db_items, total_count = await filament.find(
         db=db,
         ids=filter_by_ids,
+        search=search,
+        similar_color_ids=similar_color_ids,
         vendor_name=vendor_name if vendor_name is not None else vendor_name_old,
         vendor_id=vendor_ids,
         name=name,

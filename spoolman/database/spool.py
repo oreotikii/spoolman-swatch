@@ -19,6 +19,7 @@ from spoolman.database.utils import (
     add_where_clause_int_opt,
     add_where_clause_str,
     add_where_clause_str_opt,
+    normalize_color_hex_query,
     parse_nested_field,
 )
 from spoolman.exceptions import ItemCreateError, ItemNotFoundError, SpoolMeasureError
@@ -114,6 +115,8 @@ async def get_by_id(db: AsyncSession, spool_id: int) -> models.Spool:
 async def find(  # noqa: C901, PLR0912
     *,
     db: AsyncSession,
+    search: str | None = None,
+    similar_color_filament_ids: Sequence[int] | None = None,
     filament_name: str | None = None,
     filament_id: int | Sequence[int] | None = None,
     filament_material: str | None = None,
@@ -147,6 +150,7 @@ async def find(  # noqa: C901, PLR0912
     stmt = add_where_clause_str_opt(stmt, models.Filament.material, filament_material)
     stmt = add_where_clause_str_opt(stmt, models.Spool.location, location)
     stmt = add_where_clause_str_opt(stmt, models.Spool.lot_nr, lot_nr)
+    stmt = add_search_clause(stmt, search, similar_color_filament_ids)
 
     if not allow_archived:
         # Since the archived field is nullable, and default is false, we need to check for both false or null
@@ -206,6 +210,42 @@ async def find(  # noqa: C901, PLR0912
         total_count = len(result)
 
     return result, total_count
+
+
+def add_search_clause(
+    stmt: sqlalchemy.Select,
+    search: str | None,
+    similar_color_filament_ids: Sequence[int] | None,
+) -> sqlalchemy.Select:
+    """Add a global text/color search clause to a spool query."""
+    if search is None:
+        return stmt
+
+    search_terms = [term for term in search.strip().split() if term]
+    for term in search_terms:
+        color_term = term.removeprefix("#")
+        term_pattern = f"%{term}%"
+        color_pattern = f"%{color_term}%"
+        conditions = [
+            sqlalchemy.cast(models.Spool.id, sqlalchemy.String).ilike(term_pattern),
+            sqlalchemy.cast(models.Spool.filament_id, sqlalchemy.String).ilike(term_pattern),
+            models.Spool.location.ilike(term_pattern),
+            models.Spool.lot_nr.ilike(term_pattern),
+            models.Spool.comment.ilike(term_pattern),
+            models.Vendor.name.ilike(term_pattern),
+            models.Filament.name.ilike(term_pattern),
+            models.Filament.material.ilike(term_pattern),
+            models.Filament.article_number.ilike(term_pattern),
+            models.Filament.comment.ilike(term_pattern),
+            models.Filament.external_id.ilike(term_pattern),
+            models.Filament.color_hex.ilike(color_pattern),
+            models.Filament.multi_color_hexes.ilike(color_pattern),
+        ]
+        if normalize_color_hex_query(term) is not None and similar_color_filament_ids is not None:
+            conditions.append(models.Spool.filament_id.in_(similar_color_filament_ids))
+        stmt = stmt.where(sqlalchemy.or_(*conditions))
+
+    return stmt
 
 
 async def update(

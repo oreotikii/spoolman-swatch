@@ -1,5 +1,6 @@
 """Utility functions for the database module."""
 
+import re
 from collections.abc import Sequence
 from enum import Enum
 from typing import Any, TypeVar
@@ -118,6 +119,14 @@ def add_where_clause_int_opt(
 
 
 T = TypeVar("T")
+
+
+def normalize_color_hex_query(value: str) -> str | None:
+    """Return a normalized color query if it looks like a full hex color."""
+    color = value.strip().removeprefix("#")
+    if re.fullmatch(r"[0-9a-fA-F]{6}([0-9a-fA-F]{2})?", color):
+        return color.upper()
+    return None
 
 
 def add_where_clause_int_in(
